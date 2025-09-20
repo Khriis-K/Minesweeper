@@ -195,6 +195,25 @@ public class MainActivity extends AppCompatActivity {
                     tv.setText(getString(R.string.mine));
                     // end game
                     endGame();
+                    return;
+                }
+
+                // update with number of adjacent mines
+                int numAdjacentMines = getNumberOfAdjacentMines(i, j);
+                if (numAdjacentMines > 0) {
+                    tv.setText(String.valueOf(numAdjacentMines));
+                }
+                // number of adjacent mines is 0, so reveal all adjacent cells
+                else{
+                    for (int k = i - 1; k <= i + 1; k++) {
+                        for (int l = j - 1; l <= j + 1; l++) {
+                            if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
+                                if (!revealed[k][l]) {
+                                    onClickTV(cell_tvs.get(k * COLUMN_COUNT + l));
+                                }
+                            }
+                            }
+                    }
                 }
             }
         }
@@ -207,14 +226,31 @@ public class MainActivity extends AppCompatActivity {
 //        }
     }
 
+    // helper function to get number of adjacent mines
+    // i and j are the indices of the cell that was clicked
+    private int getNumberOfAdjacentMines(int i, int j){
+        // 3x3 matrix, [i][j] is the center cell
+        int count = 0;
+        for (int k = i - 1; k <= i + 1; k++) {
+            for (int l = j - 1; l <= j + 1; l++) {
+                if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
+                    if (mines.contains(k * COLUMN_COUNT + l)) {
+                        ++count;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
     private void endGame(){
         running = false;
 
-        // reveal all mines
+        // reveal all cells; don't replace flagged cells with mines
         for (int i = 0; i < ROW_COUNT; i++) {
             for (int j = 0; j < COLUMN_COUNT; j++) {
                 cell_tvs.get(i * COLUMN_COUNT + j).setBackgroundColor(Color.LTGRAY);
-                if (mines.contains(i * COLUMN_COUNT + j)) {
+                if (!flagged[i][j] && mines.contains(i * COLUMN_COUNT + j)) {
                     cell_tvs.get(i * COLUMN_COUNT + j).setText(getString(R.string.mine));
                 }
             }
