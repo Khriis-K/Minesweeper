@@ -34,6 +34,10 @@ public class MainActivity extends AppCompatActivity {
 
     private ArrayList<TextView> cell_tvs;
 
+    // 2D revealed and flagged ArrayLists
+    private boolean[][] revealed = new boolean[ROW_COUNT][COLUMN_COUNT];
+    private boolean[][] flagged = new boolean[ROW_COUNT][COLUMN_COUNT];
+
     private int clock = 0;
     private boolean running = true;
 
@@ -85,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
             for (int j = 0; j < COLUMN_COUNT; j++) {
                 TextView tv = (TextView) li.inflate(R.layout.custom_cell_layout, grid, false);
                 tv.setBackgroundColor(Color.GREEN);
+                tv.setTextColor(Color.BLACK);
 
                 tv.setOnClickListener(this::onClickTV);
 
@@ -108,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
         }
         runTimer();
 
+        // set click handler for modeIcon
         TextView modeIcon = findViewById(R.id.modeIcon);
         modeIcon.setOnClickListener(v -> {
             if (isFlagging) {
@@ -118,6 +124,10 @@ public class MainActivity extends AppCompatActivity {
                 isFlagging = true;
             }
         });
+
+        // set flag count to number of bombs
+        TextView flagCount = findViewById(R.id.flagCount);
+        flagCount.setText(String.valueOf(NUM_BOMBS));
     }
 
     public void onSaveInstanceState(@NonNull Bundle savedInstanceState) {
@@ -147,14 +157,47 @@ public class MainActivity extends AppCompatActivity {
 //        tv.setText(String.valueOf(i)+String.valueOf(j));
 
 //        tv.setTextColor(Color.GRAY);
-        tv.setBackgroundColor(Color.LTGRAY);
-        // check if mine
-        if (mines.contains(i * COLUMN_COUNT + j)) {
-            tv.setText(getString(R.string.mine));
-            tv.setEnabled(false);
-        }
+        // check if already revealed
+        if (!revealed[i][j]) {
+            // check if flagging or picking
+            if (isFlagging) {
+                // unflag the cell
+                if (flagged[i][j]) {
+                    tv.setText("");
+                    flagged[i][j] = false;
 
-        tv.setEnabled(false);
+                    // Increment flag count TextView
+                    TextView flagCount = findViewById(R.id.flagCount);
+                    flagCount.setText(String.valueOf(Integer.parseInt(flagCount.getText().toString()) + 1));
+                }
+                // flag the cell
+                else {
+                    tv.setText(getString(R.string.flag));
+                    flagged[i][j] = true;
+
+                    // Decrement flag count TextView
+                    TextView flagCount = findViewById(R.id.flagCount);
+                    flagCount.setText(String.valueOf(Integer.parseInt(flagCount.getText().toString()) - 1));
+                }
+            }
+            // picking
+            else{
+                // prohibit mining flagged cells
+                if (flagged[i][j]) {
+                    return;
+                }
+
+                revealed[i][j] = true;
+                tv.setBackgroundColor(Color.LTGRAY);
+
+                // check if mine
+                if (mines.contains(i * COLUMN_COUNT + j)) {
+                    tv.setText(getString(R.string.mine));
+                    // end game
+                    endGame();
+                }
+            }
+        }
 //        if (tv.getCurrentTextColor() == Color.GRAY) {
 //            tv.setTextColor(Color.GREEN);
 //            tv.setBackgroundColor(Color.parseColor("lime"));
@@ -162,6 +205,20 @@ public class MainActivity extends AppCompatActivity {
 //            tv.setTextColor(Color.GRAY);
 //            tv.setBackgroundColor(Color.LTGRAY);
 //        }
+    }
+
+    private void endGame(){
+        running = false;
+
+        // reveal all mines
+        for (int i = 0; i < ROW_COUNT; i++) {
+            for (int j = 0; j < COLUMN_COUNT; j++) {
+                cell_tvs.get(i * COLUMN_COUNT + j).setBackgroundColor(Color.LTGRAY);
+                if (mines.contains(i * COLUMN_COUNT + j)) {
+                    cell_tvs.get(i * COLUMN_COUNT + j).setText(getString(R.string.mine));
+                }
+            }
+        }
     }
 
     private void runTimer() {
