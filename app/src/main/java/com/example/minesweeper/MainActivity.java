@@ -37,6 +37,9 @@ public class MainActivity extends AppCompatActivity {
     private int clock = 0;
     private boolean running = true;
 
+    // true = picking, false = flagging
+    private boolean isFlagging = false;
+
     // helper function to convert dp to pixels
     private int dpToPixel(int dp) {
         float density = Resources.getSystem().getDisplayMetrics().density;
@@ -47,16 +50,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         // entry point for application
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
+        // load XML layout
         setContentView(R.layout.activity_main);
+
+        EdgeToEdge.enable(this);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-
-        // load XML layout
-        setContentView(R.layout.activity_main);
 
         // generate 5 unique numbers between 0 and 99 and store in Set mines
         Random rand = new Random();
@@ -105,6 +107,17 @@ public class MainActivity extends AppCompatActivity {
             running = savedInstanceState.getBoolean("running");
         }
         runTimer();
+
+        TextView modeIcon = findViewById(R.id.modeIcon);
+        modeIcon.setOnClickListener(v -> {
+            if (isFlagging) {
+                modeIcon.setText(R.string.pick);
+                isFlagging = false;
+            } else {
+                modeIcon.setText(R.string.flag);
+                isFlagging = true;
+            }
+        });
     }
 
     public void onSaveInstanceState(@NonNull Bundle savedInstanceState) {
