@@ -69,8 +69,6 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
-        Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.purple));
 
         // generate 5 unique numbers between 0 and 99 and store in Set mines
         Random rand = new Random();
@@ -156,6 +154,14 @@ public class MainActivity extends AppCompatActivity {
     // click handler for TextView
     public void onClickTV(View view){
         TextView tv = (TextView) view;
+        if (!running){
+            Intent intent = new Intent(this, ResultsActivity.class);
+            intent.putExtra("won", won);
+            intent.putExtra("time", clock);
+            startActivity(intent);
+            return;
+        }
+
         if (!tv.isEnabled())
             return;
 
@@ -275,11 +281,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
-
-        Intent intent = new Intent(this, ResultsActivity.class);
-        intent.putExtra("won", won);
-        intent.putExtra("time", clock);
-        startActivity(intent);
     }
 
     private void runTimer() {

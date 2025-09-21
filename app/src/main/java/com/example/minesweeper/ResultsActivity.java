@@ -2,6 +2,7 @@ package com.example.minesweeper;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.widget.TextView;
@@ -26,15 +27,12 @@ public class ResultsActivity extends AppCompatActivity {
             return insets;
         });
 
-        Window window = getWindow();
-        window.setStatusBarColor(ContextCompat.getColor(this, R.color.purple));
-
         Intent intent = getIntent();
         boolean won = intent.getBooleanExtra("won", false);
         String time = String.valueOf(intent.getIntExtra("time", 0));
 
         TextView timeUsedTextView = findViewById(R.id.timeUsedTextView);
-        String timeUsed = "Used " + time + " seconds";
+        String timeUsed = "Used " + time + " seconds.";
         timeUsedTextView.setText(timeUsed);
 
         TextView winLossTextView = findViewById(R.id.winLossTextView);
