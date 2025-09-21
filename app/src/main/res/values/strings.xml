@@ -4,5 +4,5 @@
     <string name="flag">🚩</string>
     <string name="mine">\uD83D\uDCA3</string>
     <string name="pick">⛏️</string>
-
+    <string name="play_again">PLAY AGAIN</string>
 </resources>

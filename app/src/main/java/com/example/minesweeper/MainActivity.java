@@ -7,13 +7,17 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.content.Intent;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.gridlayout.widget.GridLayout;
+
+import android.view.Window;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -44,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
     // true = picking, false = flagging
     private boolean isFlagging = false;
 
+    private boolean won = false;
+
     // helper function to convert dp to pixels
     private int dpToPixel(int dp) {
         float density = Resources.getSystem().getDisplayMetrics().density;
@@ -63,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        Window window = getWindow();
+        window.setStatusBarColor(ContextCompat.getColor(this, R.color.purple));
 
         // generate 5 unique numbers between 0 and 99 and store in Set mines
         Random rand = new Random();
@@ -215,6 +223,18 @@ public class MainActivity extends AppCompatActivity {
                             }
                     }
                 }
+
+                // check if all non-mine cells are revealed
+                for (int k = 0; k < ROW_COUNT; k++) {
+                    for (int l = 0; l < COLUMN_COUNT; l++) {
+                        if (!revealed[k][l] && !mines.contains(k * COLUMN_COUNT + l)) {
+                            return;
+                        }
+                    }
+                }
+                // all non-mine cells are revealed
+                won = true;
+                endGame();
             }
         }
 //        if (tv.getCurrentTextColor() == Color.GRAY) {
@@ -255,6 +275,11 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+
+        Intent intent = new Intent(this, ResultsActivity.class);
+        intent.putExtra("won", won);
+        intent.putExtra("time", clock);
+        startActivity(intent);
     }
 
     private void runTimer() {
@@ -267,6 +292,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 int seconds = clock%60;
+                // cast seconds to string; if less than 10, add a 0 to the front
                 @SuppressLint("DefaultLocale") String time = String.format("%02d", seconds);
                 timeView.setText(time);
 
