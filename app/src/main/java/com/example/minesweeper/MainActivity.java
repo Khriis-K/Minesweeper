@@ -50,12 +50,6 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean won = false;
 
-    // helper function to convert dp to pixels
-    private int dpToPixel(int dp) {
-        float density = Resources.getSystem().getDisplayMetrics().density;
-        return Math.round(dp * density);
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // entry point for application
@@ -243,13 +237,6 @@ public class MainActivity extends AppCompatActivity {
                 endGame();
             }
         }
-//        if (tv.getCurrentTextColor() == Color.GRAY) {
-//            tv.setTextColor(Color.GREEN);
-//            tv.setBackgroundColor(Color.parseColor("lime"));
-//        }else {
-//            tv.setTextColor(Color.GRAY);
-//            tv.setBackgroundColor(Color.LTGRAY);
-//        }
     }
 
     // helper function to get number of adjacent mines
@@ -292,9 +279,9 @@ public class MainActivity extends AppCompatActivity {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                int seconds = clock%60;
-                // cast seconds to string; if less than 10, add a 0 to the front
-                @SuppressLint("DefaultLocale") String time = String.format("%02d", seconds);
+                int seconds = clock;
+                // cast seconds to string
+                @SuppressLint("DefaultLocale") String time = String.valueOf(seconds);
                 timeView.setText(time);
 
                 if (running) {
