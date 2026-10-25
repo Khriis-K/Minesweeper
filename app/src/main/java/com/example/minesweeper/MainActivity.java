@@ -77,9 +77,10 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < ROW_COUNT; i++) {
             for (int j = 0; j < COLUMN_COUNT; j++) {
                 TextView tv = (TextView) li.inflate(R.layout.custom_cell_layout, grid, false);
-                tv.setBackgroundColor(Color.GREEN);
                 tv.setTextColor(Color.BLACK);
 
+                // store the cell index on the view so clicks can look it up directly
+                tv.setTag(i * COLUMN_COUNT + j);
                 tv.setOnClickListener(this::onClickTV);
 
                 GridLayout.LayoutParams lp = (GridLayout.LayoutParams) tv.getLayoutParams();
@@ -108,9 +109,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // new views start blank, so redraw them from the saved game state
-        restoreBoard();
-        updateFlagCount();
+        // new views start blank, so draw them from the saved game state
+        drawBoard();
         updateClock();
     }
 
@@ -128,34 +128,36 @@ public class MainActivity extends AppCompatActivity {
         handler.removeCallbacks(tick);
     }
 
-    // redraw every cell from the ViewModel, used after the Activity is recreated
-    private void restoreBoard() {
+    // redraw every cell and the flag count from the Board
+    private void drawBoard() {
+        Board board = game.board;
         for (int i = 0; i < ROW_COUNT; i++) {
             for (int j = 0; j < COLUMN_COUNT; j++) {
                 TextView tv = cell_tvs.get(i * COLUMN_COUNT + j);
-                if (game.revealed[i][j]) {
+                if (board.isRevealed(i, j) || !game.running) {
                     tv.setBackgroundColor(Color.LTGRAY);
-                    if (game.mines.contains(i * COLUMN_COUNT + j)) {
-                        tv.setText(getString(R.string.mine));
-                    } else {
-                        int numAdjacentMines = getNumberOfAdjacentMines(i, j);
-                        if (numAdjacentMines > 0) {
-                            tv.setText(String.valueOf(numAdjacentMines));
-                        }
-                    }
-                } else if (game.flagged[i][j]) {
+                } else {
+                    tv.setBackgroundColor(Color.GREEN);
+                }
+
+                if (board.isFlagged(i, j)) {
                     tv.setText(getString(R.string.flag));
+                }
+                // show mines that were hit, or all unflagged mines once the game is over
+                else if (board.isMine(i, j) && (board.isRevealed(i, j) || !game.running)) {
+                    tv.setText(getString(R.string.mine));
+                }
+                else if (board.isRevealed(i, j) && board.getAdjacentMineCount(i, j) > 0) {
+                    tv.setText(String.valueOf(board.getAdjacentMineCount(i, j)));
+                }
+                else {
+                    tv.setText("");
                 }
             }
         }
-        if (!game.running) {
-            revealAllCells();
-        }
-    }
 
-    private void updateFlagCount() {
         TextView flagCount = findViewById(R.id.flagCount);
-        flagCount.setText(String.valueOf(game.flagsLeft));
+        flagCount.setText(String.valueOf(board.getFlagsLeft()));
     }
 
     private void updateClock() {
@@ -163,18 +165,8 @@ public class MainActivity extends AppCompatActivity {
         timeView.setText(String.valueOf(game.clock));
     }
 
-    // helper function to find index of TextView in ArrayList
-    private int findIndexOfCellTextView(TextView tv) {
-        for (int n=0; n<cell_tvs.size(); n++) {
-            if (cell_tvs.get(n) == tv)
-                return n;
-        }
-        return -1;
-    }
-
     // click handler for TextView
     public void onClickTV(View view){
-        TextView tv = (TextView) view;
         if (!game.running){
             Intent intent = new Intent(this, ResultsActivity.class);
             intent.putExtra("won", game.won);
@@ -183,113 +175,23 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        if (!tv.isEnabled())
-            return;
-
-        int n = findIndexOfCellTextView(tv);
+        int n = (int) view.getTag();
         int i = n/COLUMN_COUNT;
         int j = n%COLUMN_COUNT;
 
-        // check if already revealed
-        if (!game.revealed[i][j]) {
-            // check if flagging or picking
-            if (game.isFlagging) {
-                // unflag the cell
-                if (game.flagged[i][j]) {
-                    tv.setText("");
-                    game.flagged[i][j] = false;
-                    game.flagsLeft++;
-                }
-                // flag the cell
-                else {
-                    tv.setText(getString(R.string.flag));
-                    game.flagged[i][j] = true;
-                    game.flagsLeft--;
-                }
-                updateFlagCount();
-            }
-            // picking
-            else{
-                // prohibit mining flagged cells
-                if (game.flagged[i][j]) {
-                    return;
-                }
-
-                game.revealed[i][j] = true;
-                tv.setBackgroundColor(Color.LTGRAY);
-
-                // check if mine
-                if (game.mines.contains(i * COLUMN_COUNT + j)) {
-                    tv.setText(getString(R.string.mine));
-                    // end game
-                    endGame();
-                    return;
-                }
-
-                // update with number of adjacent mines
-                int numAdjacentMines = getNumberOfAdjacentMines(i, j);
-                if (numAdjacentMines > 0) {
-                    tv.setText(String.valueOf(numAdjacentMines));
-                }
-                // number of adjacent mines is 0, so reveal all adjacent cells
-                else{
-                    for (int k = i - 1; k <= i + 1; k++) {
-                        for (int l = j - 1; l <= j + 1; l++) {
-                            if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
-                                if (!game.revealed[k][l]) {
-                                    onClickTV(cell_tvs.get(k * COLUMN_COUNT + l));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // check if all non-mine cells are revealed
-                for (int k = 0; k < ROW_COUNT; k++) {
-                    for (int l = 0; l < COLUMN_COUNT; l++) {
-                        if (!game.revealed[k][l] && !game.mines.contains(k * COLUMN_COUNT + l)) {
-                            return;
-                        }
-                    }
-                }
-                // all non-mine cells are revealed
-                game.won = true;
-                endGame();
-            }
+        if (game.isFlagging) {
+            game.board.toggleFlag(i, j);
         }
-    }
-
-    // helper function to get number of adjacent mines
-    // i and j are the indices of the cell that was clicked
-    private int getNumberOfAdjacentMines(int i, int j){
-        // 3x3 matrix, [i][j] is the center cell
-        int count = 0;
-        for (int k = i - 1; k <= i + 1; k++) {
-            for (int l = j - 1; l <= j + 1; l++) {
-                if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
-                    if (game.mines.contains(k * COLUMN_COUNT + l)) {
-                        ++count;
-                    }
-                }
-            }
+        // picking; hitting a mine ends the game
+        else if (game.board.reveal(i, j)) {
+            game.running = false;
         }
-        return count;
-    }
-
-    private void endGame(){
-        game.running = false;
-        revealAllCells();
-    }
-
-    // reveal all cells; don't replace flagged cells with mines
-    private void revealAllCells() {
-        for (int i = 0; i < ROW_COUNT; i++) {
-            for (int j = 0; j < COLUMN_COUNT; j++) {
-                cell_tvs.get(i * COLUMN_COUNT + j).setBackgroundColor(Color.LTGRAY);
-                if (!game.flagged[i][j] && game.mines.contains(i * COLUMN_COUNT + j)) {
-                    cell_tvs.get(i * COLUMN_COUNT + j).setText(getString(R.string.mine));
-                }
-            }
+        // all non-mine cells are revealed
+        else if (game.board.isWon()) {
+            game.won = true;
+            game.running = false;
         }
+
+        drawBoard();
     }
 }
