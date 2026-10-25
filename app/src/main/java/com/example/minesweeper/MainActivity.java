@@ -66,12 +66,8 @@ public class MainActivity extends AppCompatActivity {
 
         cell_tvs = new ArrayList<TextView>();
 
+        // the layout keeps the grid square (constraintDimensionRatio 1:1)
         GridLayout grid = findViewById(R.id.gridLayout01);
-        grid.post(() -> {
-            // use screen width to make grid square
-            grid.getLayoutParams().height = grid.getWidth();
-            grid.requestLayout();
-        });
 
         LayoutInflater li = LayoutInflater.from(this);
         for (int i = 0; i < ROW_COUNT; i++) {

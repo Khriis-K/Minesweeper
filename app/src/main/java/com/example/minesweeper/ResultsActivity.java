@@ -47,7 +47,12 @@ public class ResultsActivity extends AppCompatActivity {
     }
 
     public void backToMain(View view) {
+        // return to the existing MainActivity instead of stacking a new one on top;
+        // CLEAR_TOP finishes this screen and the old game, then starts a fresh MainActivity
+        // (the finished Activity's ViewModel is cleared, so a new board is created)
         Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
+        finish();
     }
 }
