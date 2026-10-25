@@ -1,54 +1,51 @@
 package com.example.minesweeper;
 
-import android.annotation.SuppressLint;
-import android.content.res.Resources;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.content.Intent;
 
 import androidx.activity.EdgeToEdge;
-import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.gridlayout.widget.GridLayout;
+import androidx.lifecycle.ViewModelProvider;
 
-import android.view.Window;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int COLUMN_COUNT = 10;
-    private static final int ROW_COUNT = 10;
+    private static final int COLUMN_COUNT = GameViewModel.COLUMN_COUNT;
+    private static final int ROW_COUNT = GameViewModel.ROW_COUNT;
 
-    private static final int NUM_BOMBS = 5;
-
-    private Set<Integer> mines;
+    // game state lives in the ViewModel so it survives rotation
+    private GameViewModel game;
 
     private ArrayList<TextView> cell_tvs;
 
-    // 2D revealed and flagged ArrayLists
-    private boolean[][] revealed = new boolean[ROW_COUNT][COLUMN_COUNT];
-    private boolean[][] flagged = new boolean[ROW_COUNT][COLUMN_COUNT];
+    // handler will be used to run the timer; tied to the main thread's Looper
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
-    private int clock = 0;
-    private boolean running = true;
-
-    // true = picking, false = flagging
-    private boolean isFlagging = false;
-
-    private boolean won = false;
+    // timer tick, posted every second while the Activity is in the foreground
+    private final Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            if (game.running) {
+                game.clock++;
+            }
+            updateClock();
+            // run again after 1 second
+            handler.postDelayed(this, 1000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,16 +61,8 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
-        // generate 5 unique numbers between 0 and 99 and store in Set mines
-        Random rand = new Random();
-        int bombNum = rand.nextInt(ROW_COUNT * COLUMN_COUNT);
-        mines = new HashSet<Integer>();
-        while (mines.size() < NUM_BOMBS) {
-            while (mines.contains(bombNum)) {
-                bombNum = rand.nextInt(ROW_COUNT * COLUMN_COUNT);
-            }
-            mines.add(rand.nextInt(ROW_COUNT * COLUMN_COUNT));
-        }
+        // returns the existing ViewModel after a rotation, or creates a new game on first launch
+        game = new ViewModelProvider(this).get(GameViewModel.class);
 
         cell_tvs = new ArrayList<TextView>();
 
@@ -106,34 +95,72 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        // load clock value from savedInstanceState if it exists
-        if (savedInstanceState != null) {
-            clock = savedInstanceState.getInt("clock");
-            running = savedInstanceState.getBoolean("running");
-        }
-        runTimer();
-
         // set click handler for modeIcon
         TextView modeIcon = findViewById(R.id.modeIcon);
+        modeIcon.setText(game.isFlagging ? R.string.flag : R.string.pick);
         modeIcon.setOnClickListener(v -> {
-            if (isFlagging) {
+            if (game.isFlagging) {
                 modeIcon.setText(R.string.pick);
-                isFlagging = false;
+                game.isFlagging = false;
             } else {
                 modeIcon.setText(R.string.flag);
-                isFlagging = true;
+                game.isFlagging = true;
             }
         });
 
-        // set flag count to number of bombs
-        TextView flagCount = findViewById(R.id.flagCount);
-        flagCount.setText(String.valueOf(NUM_BOMBS));
+        // new views start blank, so redraw them from the saved game state
+        restoreBoard();
+        updateFlagCount();
+        updateClock();
     }
 
-    public void onSaveInstanceState(@NonNull Bundle savedInstanceState) {
-        super.onSaveInstanceState(savedInstanceState);
-        savedInstanceState.putInt("clock", clock);
-        savedInstanceState.putBoolean("running", running);
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // start ticking only while visible
+        handler.postDelayed(tick, 1000);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // stop the timer so the Runnable doesn't keep this Activity alive after it's gone
+        handler.removeCallbacks(tick);
+    }
+
+    // redraw every cell from the ViewModel, used after the Activity is recreated
+    private void restoreBoard() {
+        for (int i = 0; i < ROW_COUNT; i++) {
+            for (int j = 0; j < COLUMN_COUNT; j++) {
+                TextView tv = cell_tvs.get(i * COLUMN_COUNT + j);
+                if (game.revealed[i][j]) {
+                    tv.setBackgroundColor(Color.LTGRAY);
+                    if (game.mines.contains(i * COLUMN_COUNT + j)) {
+                        tv.setText(getString(R.string.mine));
+                    } else {
+                        int numAdjacentMines = getNumberOfAdjacentMines(i, j);
+                        if (numAdjacentMines > 0) {
+                            tv.setText(String.valueOf(numAdjacentMines));
+                        }
+                    }
+                } else if (game.flagged[i][j]) {
+                    tv.setText(getString(R.string.flag));
+                }
+            }
+        }
+        if (!game.running) {
+            revealAllCells();
+        }
+    }
+
+    private void updateFlagCount() {
+        TextView flagCount = findViewById(R.id.flagCount);
+        flagCount.setText(String.valueOf(game.flagsLeft));
+    }
+
+    private void updateClock() {
+        TextView timeView = findViewById(R.id.clock);
+        timeView.setText(String.valueOf(game.clock));
     }
 
     // helper function to find index of TextView in ArrayList
@@ -148,10 +175,10 @@ public class MainActivity extends AppCompatActivity {
     // click handler for TextView
     public void onClickTV(View view){
         TextView tv = (TextView) view;
-        if (!running){
+        if (!game.running){
             Intent intent = new Intent(this, ResultsActivity.class);
-            intent.putExtra("won", won);
-            intent.putExtra("time", clock);
+            intent.putExtra("won", game.won);
+            intent.putExtra("time", game.clock);
             startActivity(intent);
             return;
         }
@@ -162,44 +189,37 @@ public class MainActivity extends AppCompatActivity {
         int n = findIndexOfCellTextView(tv);
         int i = n/COLUMN_COUNT;
         int j = n%COLUMN_COUNT;
-//        tv.setText(String.valueOf(i)+String.valueOf(j));
 
-//        tv.setTextColor(Color.GRAY);
         // check if already revealed
-        if (!revealed[i][j]) {
+        if (!game.revealed[i][j]) {
             // check if flagging or picking
-            if (isFlagging) {
+            if (game.isFlagging) {
                 // unflag the cell
-                if (flagged[i][j]) {
+                if (game.flagged[i][j]) {
                     tv.setText("");
-                    flagged[i][j] = false;
-
-                    // Increment flag count TextView
-                    TextView flagCount = findViewById(R.id.flagCount);
-                    flagCount.setText(String.valueOf(Integer.parseInt(flagCount.getText().toString()) + 1));
+                    game.flagged[i][j] = false;
+                    game.flagsLeft++;
                 }
                 // flag the cell
                 else {
                     tv.setText(getString(R.string.flag));
-                    flagged[i][j] = true;
-
-                    // Decrement flag count TextView
-                    TextView flagCount = findViewById(R.id.flagCount);
-                    flagCount.setText(String.valueOf(Integer.parseInt(flagCount.getText().toString()) - 1));
+                    game.flagged[i][j] = true;
+                    game.flagsLeft--;
                 }
+                updateFlagCount();
             }
             // picking
             else{
                 // prohibit mining flagged cells
-                if (flagged[i][j]) {
+                if (game.flagged[i][j]) {
                     return;
                 }
 
-                revealed[i][j] = true;
+                game.revealed[i][j] = true;
                 tv.setBackgroundColor(Color.LTGRAY);
 
                 // check if mine
-                if (mines.contains(i * COLUMN_COUNT + j)) {
+                if (game.mines.contains(i * COLUMN_COUNT + j)) {
                     tv.setText(getString(R.string.mine));
                     // end game
                     endGame();
@@ -216,24 +236,24 @@ public class MainActivity extends AppCompatActivity {
                     for (int k = i - 1; k <= i + 1; k++) {
                         for (int l = j - 1; l <= j + 1; l++) {
                             if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
-                                if (!revealed[k][l]) {
+                                if (!game.revealed[k][l]) {
                                     onClickTV(cell_tvs.get(k * COLUMN_COUNT + l));
                                 }
                             }
-                            }
+                        }
                     }
                 }
 
                 // check if all non-mine cells are revealed
                 for (int k = 0; k < ROW_COUNT; k++) {
                     for (int l = 0; l < COLUMN_COUNT; l++) {
-                        if (!revealed[k][l] && !mines.contains(k * COLUMN_COUNT + l)) {
+                        if (!game.revealed[k][l] && !game.mines.contains(k * COLUMN_COUNT + l)) {
                             return;
                         }
                     }
                 }
                 // all non-mine cells are revealed
-                won = true;
+                game.won = true;
                 endGame();
             }
         }
@@ -247,7 +267,7 @@ public class MainActivity extends AppCompatActivity {
         for (int k = i - 1; k <= i + 1; k++) {
             for (int l = j - 1; l <= j + 1; l++) {
                 if (k >= 0 && k < ROW_COUNT && l >= 0 && l < COLUMN_COUNT) {
-                    if (mines.contains(k * COLUMN_COUNT + l)) {
+                    if (game.mines.contains(k * COLUMN_COUNT + l)) {
                         ++count;
                     }
                 }
@@ -257,39 +277,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void endGame(){
-        running = false;
+        game.running = false;
+        revealAllCells();
+    }
 
-        // reveal all cells; don't replace flagged cells with mines
+    // reveal all cells; don't replace flagged cells with mines
+    private void revealAllCells() {
         for (int i = 0; i < ROW_COUNT; i++) {
             for (int j = 0; j < COLUMN_COUNT; j++) {
                 cell_tvs.get(i * COLUMN_COUNT + j).setBackgroundColor(Color.LTGRAY);
-                if (!flagged[i][j] && mines.contains(i * COLUMN_COUNT + j)) {
+                if (!game.flagged[i][j] && game.mines.contains(i * COLUMN_COUNT + j)) {
                     cell_tvs.get(i * COLUMN_COUNT + j).setText(getString(R.string.mine));
                 }
             }
         }
-    }
-
-    private void runTimer() {
-        final TextView timeView = (TextView) findViewById(R.id.clock);
-        // handler will be used to run the timer
-        final Handler handler = new Handler();
-
-        // run timer every second
-        handler.post(new Runnable() {
-            @Override
-            public void run() {
-                int seconds = clock;
-                // cast seconds to string
-                @SuppressLint("DefaultLocale") String time = String.valueOf(seconds);
-                timeView.setText(time);
-
-                if (running) {
-                    clock++;
-                }
-                // run again after 1 second
-                handler.postDelayed(this, 1000);
-            }
-        });
     }
 }
